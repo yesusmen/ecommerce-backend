@@ -36,16 +36,21 @@ export class AuthService {
             throw new HttpException('Credenciales no validas', HttpStatus.UNAUTHORIZED);
         }
         const payload = { email: emailExistingUser.email, sub: emailExistingUser.id };
-        const accessToken = this.jwtService.sign(payload);
+        const accessToken = 'Bearer ' + this.jwtService.sign(payload);
         
         // Add Token JWT UsersController
         const userToken = await this.userRepository.update(emailExistingUser.id, { notification_token: accessToken });
+
+        const userUpdate = await this.userRepository.findOneBy({ id: emailExistingUser.id });
+
+        const userLogeado = { ...userUpdate };
+        delete userLogeado?.password; // Remove the password field from the user object before returning it
         
-        return userToken.affected ? { accessToken, user: emailExistingUser } : { accessToken, user: emailExistingUser };
+        return { accessToken, user: userLogeado as User };
     }
    
     
-    async register(user: RegisterAuthDto): Promise<User> {
+    async register(user: RegisterAuthDto){
 
         // Check if the user already exists
         const existingUser = await this.userRepository.findOneBy({ email: user.email });
@@ -61,8 +66,14 @@ export class AuthService {
 
         const newUser = this.userRepository.create(user);
         const savedUser = await this.userRepository.save(newUser);
+
+        // Add Token JWT UsersController
+        const payload = { email: savedUser.email, sub: savedUser.id };
+        const accessToken = 'Bearer ' + this.jwtService.sign(payload);
+        const userToken = await this.userRepository.update(savedUser.id, { notification_token: accessToken });
+
         const { password, ...result } = savedUser;
-        return result as User;
+        return { accessToken, result };
     }
 
 }
