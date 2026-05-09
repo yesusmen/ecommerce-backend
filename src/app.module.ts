@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { jwtConstants } from './auth/constants';
+import { RolesModule } from './roles/roles.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { jwtConstants } from './auth/constants';
       global: true,
       secret: jwtConstants.secret, // Cambia esto por una clave secreta segura
       signOptions: { expiresIn: '1h' }, // Opcional: establece un tiempo de expiración para el token
-    })
+    }),
+    RolesModule
   ],
   controllers: [AppController],
   providers: [AppService],

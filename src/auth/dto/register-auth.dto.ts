@@ -23,6 +23,8 @@ export class RegisterAuthDto {
     @IsNotEmpty()
     @IsString()
     @MinLength(6, { message: 'Password must be at least 6 characters long' }) // You can specify a minimum length for the password
-    password: string = '';   
+    password: string = ''; 
+    
+    rolesIds: string[];
 
 }     

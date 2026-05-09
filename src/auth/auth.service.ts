@@ -1,4 +1,4 @@
-import { UsersController } from './../users/users.controller';
+
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/user.entity';
@@ -7,12 +7,14 @@ import bcrypt from 'node_modules/bcryptjs';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import { JwtService } from '@nestjs/jwt';
+import { Rol } from 'src/roles/role.entity';
 
 @Injectable()
 export class AuthService {
 
     constructor(
         @InjectRepository(User) private userRepository: Repository<User>,
+        @InjectRepository(Rol) private roleRepository: Repository<Rol>,
         private jwtService: JwtService
     ) {}
 
@@ -26,22 +28,38 @@ export class AuthService {
     }
 
     async login(loginData: LoginAuthDto): Promise<{ accessToken: string; user: User }> {
-        const emailExistingUser = await this.userRepository.findOne({ where: { email: loginData.email } });
+
+        const emailExistingUser = await this.userRepository.findOne({ 
+            where: { 
+                email: loginData.email 
+            },
+            relations: ['roles'] // Ensure roles are loaded with the user 
+        });
         if (!emailExistingUser) {
-            throw new HttpException('Credenciales no validas', HttpStatus.UNAUTHORIZED);
+            throw new HttpException('Credenciales no validas', HttpStatus.CONFLICT);
         }
 
         const passwordValid = await bcrypt.compare(loginData.password, emailExistingUser.password);
         if (!passwordValid) {
-            throw new HttpException('Credenciales no validas', HttpStatus.UNAUTHORIZED);
+            throw new HttpException('Credenciales no validas', HttpStatus.CONFLICT);
         }
-        const payload = { email: emailExistingUser.email, sub: emailExistingUser.id };
+
+        const RolesIds = emailExistingUser.roles.map(role => role.id);
+
+        const payload = { 
+            id: emailExistingUser.id, 
+            name: emailExistingUser.firstName + ' ' + emailExistingUser.lastName, 
+            roles: RolesIds 
+        };
         const accessToken = 'Bearer ' + this.jwtService.sign(payload);
         
         // Add Token JWT UsersController
         const userToken = await this.userRepository.update(emailExistingUser.id, { notification_token: accessToken });
 
-        const userUpdate = await this.userRepository.findOneBy({ id: emailExistingUser.id });
+        const userUpdate = await this.userRepository.findOne({ 
+            where: { id: emailExistingUser.id }, 
+            relations: ['roles'] 
+        });
 
         const userLogeado = { ...userUpdate };
         delete userLogeado?.password; // Remove the password field from the user object before returning it
@@ -55,20 +73,34 @@ export class AuthService {
         // Check if the user already exists
         const existingUser = await this.userRepository.findOneBy({ email: user.email });
         if (existingUser) {
-            throw new HttpException('Usuario con este correo electrónico ya existe', HttpStatus.BAD_REQUEST);
+            throw new HttpException('Usuario con este correo electrónico ya existe', HttpStatus.CONFLICT);
         }
        
         // Check if the phone number already exists
         const existingPhone = await this.userRepository.findOne({ where: { phone: user.phone } });
         if (existingPhone) {
-            throw new HttpException('Usuario con este número de teléfono ya existe', HttpStatus.BAD_REQUEST);
+            throw new HttpException('Usuario con este número de teléfono ya existe', HttpStatus.CONFLICT);
         }
 
-        const newUser = this.userRepository.create(user);
+        // Find Rol by name "User"
+        const userRole = await this.roleRepository.findOne({ where: { id: 'CLIENT' } });
+        if (!userRole) {
+            throw new HttpException('Rol CLIENT no encontrado', HttpStatus.NOT_FOUND);
+        }
+
+        const newUser = this.userRepository.create({ ...user, roles: [userRole] });
         const savedUser = await this.userRepository.save(newUser);
 
+        const RolesIds = savedUser.roles.map(role => role.id);
+
         // Add Token JWT UsersController
-        const payload = { email: savedUser.email, sub: savedUser.id };
+        const payload = { 
+            id: savedUser.id, 
+            name: savedUser.firstName + ' ' + savedUser.lastName, 
+            email: savedUser.email, 
+            roles: RolesIds 
+        };
+        
         const accessToken = 'Bearer ' + this.jwtService.sign(payload);
         const userToken = await this.userRepository.update(savedUser.id, { notification_token: accessToken });
 
