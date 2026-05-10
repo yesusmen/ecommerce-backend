@@ -63,7 +63,7 @@ export class AuthService {
 
         const userLogeado = { ...userUpdate };
         delete userLogeado?.password; // Remove the password field from the user object before returning it
-        
+                
         return { accessToken, user: userLogeado as User };
     }
    
